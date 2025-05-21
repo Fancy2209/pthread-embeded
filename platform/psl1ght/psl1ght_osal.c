@@ -344,71 +344,13 @@ pte_osResult pte_osThreadExitAndDelete(pte_osThreadHandle handle)
   return PTE_OS_OK;
 }
 
-
-/*
- * This has to be cancellable, so we can't just call sceKernelWaitThreadEnd.
- * Instead, poll on this in a loop, like we do for a cancellable semaphore.
- */
 pte_osResult pte_osThreadWaitForEnd(pte_osThreadHandle threadHandle)
 {
-  pte_osResult osResult;
-  psl1ghtThreadData *pThreadData;
   u64 result;
-
-  pThreadData = getThreadData(threadHandle);
-
-  if (pThreadData == NULL)
-    {
-      sysThreadJoin (threadHandle, &result);
-      osResult = PTE_OS_OK;
-    }
+  if(sysThreadJoin (threadHandle, &result))
+    return PTE_OS_OK;
   else
-    {
-      while (1)
-        {
-          s32 ret;
-          s32 prio;
-          /* sysDbgGetPPUThreadStatus can only be ran with DEX
-           * so use sysThreadGetPriority to poll on the thread.
-           * The thread has ended if return value is not 0
-           */
-          ret = sysThreadGetPriority(threadHandle, &prio);
-          if (ret != 0)
-            {
-              /* Thread has ended */
-              osResult = PTE_OS_OK;
-              break;
-            }
-          else
-            {
-              s32 count;
-
-	      if (sysSemGetValue (pThreadData->cancelSem, &count) == 0)
-		{
-		  if (count > 0)
-		    {
-		      osResult = PTE_OS_INTERRUPTED;
-		      break;
-		    }
-		  else
-		    {
-		      /* Nothing found and not timed out yet; let's yield so we're not
-		       * in busy loop.
-		       */
-                      sysThreadYield ();
-		    }
-		}
-	      else
-		{
-		  osResult = PTE_OS_GENERAL_FAILURE;
-		  break;
-		}
-            }
-        }
-    }
-
-
-  return osResult;
+    return PTE_OS_GENERAL_FAILURE;
 }
 
 pte_osThreadHandle pte_osThreadGetHandle(void)
